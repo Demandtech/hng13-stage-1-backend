@@ -1,4 +1,4 @@
-import { initDB } from "../db/index.js";
+import StringModel from "../models/strings.model.js";
 import ResponseStatusException, {
   StatusCode,
 } from "../utils/ResponseStatusException.js";
@@ -28,9 +28,7 @@ export async function analyseString(value) {
     char_frequency[char] = (char_frequency[char] || 0) + 1;
   }
 
-  const db = await initDB();
-
-  const existing = await db.get("SELECT * FROM strings WHERE id = ?", [hash]);
+  const existing = await StringModel.findByPk(hash);
 
   if (existing) {
     throw new ResponseStatusException(
@@ -40,35 +38,23 @@ export async function analyseString(value) {
     );
   }
 
-  const created_at = new Date().toISOString();
-
-  await db.run(
-    "INSERT INTO strings (id, value, properties, created_at) VALUES (?, ?, ?, ?)",
-    [
-      hash,
-      string,
-      JSON.stringify({
-        length,
-        is_palindrome,
-        unique_chars,
-        word_count,
-        char_frequency,
-      }),
-      created_at,
-    ]
-  );
-
-  return {
+  const record = await StringModel.create({
     id: hash,
     value: string,
-    properties: {
+    properties: JSON.stringify({
       length,
       is_palindrome,
       unique_chars,
       word_count,
       char_frequency,
-    },
-    created_at,
+    }),
+  });
+
+  return {
+    id: record.id,
+    value: record.value,
+    properties: JSON.parse(record.properties),
+    created_at: record.created_at,
   };
 }
 
@@ -81,8 +67,7 @@ export async function getStringByValue(value) {
     );
   }
 
-  const db = await initDB();
-  const row = await db.get("SELECT * FROM strings WHERE value = ?", [value]);
+  const row = await StringModel.findOne({ where: { value } });
 
   if (!row) {
     throw new ResponseStatusException(
@@ -101,43 +86,39 @@ export async function getStringByValue(value) {
 }
 
 export async function getFilteredStrings(filters) {
-  const db = await initDB();
+  const where = {};
 
-  let query = "SELECT * FROM strings WHERE 1=1";
-  const params = [];
+  if (filters.contains_character)
+    where.value = { [Op.like]: `%${filters.contains_character}%` };
 
-  if (filters.is_palindrome !== undefined) {
-    query += " AND json_extract(properties, '$.is_palindrome') = ?";
-    params.push(filters.is_palindrome ? true : false);
-  }
+  const rows = await StringModel.findAll();
 
-  if (filters.min_length !== undefined) {
-    query += " AND json_extract(properties, '$.length') >= ?";
-    params.push(filters.min_length);
-  }
+  const filtered = rows.filter((row) => {
+    const props = JSON.parse(row.properties);
 
-  if (filters.max_length !== undefined) {
-    query += " AND json_extract(properties, '$.length') <= ?";
-    params.push(filters.max_length);
-  }
+    if (
+      filters.is_palindrome !== undefined &&
+      props.is_palindrome !== filters.is_palindrome
+    )
+      return false;
+    if (filters.min_length !== undefined && props.length < filters.min_length)
+      return false;
+    if (filters.max_length !== undefined && props.length > filters.max_length)
+      return false;
+    if (
+      filters.word_count !== undefined &&
+      props.word_count !== filters.word_count
+    )
+      return false;
 
-  if (filters.word_count !== undefined) {
-    query += " AND json_extract(properties, '$.word_count') = ?";
-    params.push(filters.word_count);
-  }
+    return true;
+  });
 
-  if (filters.contains_character !== undefined) {
-    query += " AND value LIKE ?";
-    params.push(`%${filters.contains_character}%`);
-  }
-
-  const rows = await db.all(query, params);
-
-  const data = rows.map((row) => ({
-    id: row.id,
-    value: row.value,
-    properties: JSON.parse(row.properties),
-    created_at: row.created_at,
+  const data = filtered.map((r) => ({
+    id: r.id,
+    value: r.value,
+    properties: JSON.parse(r.properties),
+    created_at: r.created_at,
   }));
 
   return {
@@ -148,15 +129,10 @@ export async function getFilteredStrings(filters) {
 }
 
 export async function deleteStringByValue(value) {
-  const db = await initDB();
-  const result = await db.run("DELETE FROM strings WHERE value = ?", [value]);
+  const deleted = await StringModel.destroy({ where: { value } });
 
-  if (result.changes === 0) {
-    throw new ResponseStatusException(
-      "String not found",
-      StatusCode.NOT_FOUND,
-      null
-    );
+  if (deleted === 0) {
+    throw new ResponseStatusException("String not found", StatusCode.NOT_FOUND);
   }
 
   return true;

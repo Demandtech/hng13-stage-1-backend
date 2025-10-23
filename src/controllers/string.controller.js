@@ -21,6 +21,7 @@ export async function handleNewString(req, res) {
     res.status(StatusCode.CREATED).json(result);
     logRequest(req, StatusCode.CREATED, start);
   } catch (error) {
+    console.log(error)
     if (error instanceof ResponseStatusException) {
       logRequest(req, error.statusCode, start);
       res.status(error.statusCode).json({ message: error.message });
