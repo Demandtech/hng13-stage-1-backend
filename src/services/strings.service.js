@@ -1,8 +1,8 @@
-import { createHash } from "crypto";
 import { initDB } from "../db/index.js";
 import ResponseStatusException, {
   StatusCode,
 } from "../utils/ResponseStatusException.js";
+import { createHash } from "node:crypto";
 
 export async function analyseString(value) {
   if (typeof value !== "string") {
@@ -19,7 +19,7 @@ export async function analyseString(value) {
   const is_palindrome =
     string_lower === string_lower.split("").reverse().join("");
   const unique_chars = new Set(string).size;
-  const word_count = string.split("/s+").filter(Boolean).length;
+  const word_count = string.split(/\s+/).filter(Boolean).length;
   const hash = createHash("sha256").update(string).digest("hex");
 
   const char_frequency = {};
@@ -30,9 +30,7 @@ export async function analyseString(value) {
 
   const db = await initDB();
 
-  const existing = await db
-    .prepare("SELECT * FROM strings WHERE id = ?")
-    .get(hash);
+  const existing = await db.get("SELECT * FROM strings WHERE id = ?", [hash]);
 
   if (existing) {
     throw new ResponseStatusException(
@@ -44,11 +42,9 @@ export async function analyseString(value) {
 
   const created_at = new Date().toISOString();
 
-  await db
-    .prepare(
-      "INSERT INTO strings (id, value, properties, created_at) VALUES (?, ?, ?, ?)"
-    )
-    .run(
+  await db.run(
+    "INSERT INTO strings (id, value, properties, created_at) VALUES (?, ?, ?, ?)",
+    [
       hash,
       string,
       JSON.stringify({
@@ -58,8 +54,9 @@ export async function analyseString(value) {
         word_count,
         char_frequency,
       }),
-      created_at
-    );
+      created_at,
+    ]
+  );
 
   return {
     id: hash,
@@ -85,9 +82,7 @@ export async function getStringByValue(value) {
   }
 
   const db = await initDB();
-
-  const stmt = db.prepare("SELECT * FROM strings WHERE value = ?");
-  const row = stmt.get(value);
+  const row = await db.get("SELECT * FROM strings WHERE value = ?", [value]);
 
   if (!row) {
     throw new ResponseStatusException(
@@ -113,7 +108,7 @@ export async function getFilteredStrings(filters) {
 
   if (filters.is_palindrome !== undefined) {
     query += " AND json_extract(properties, '$.is_palindrome') = ?";
-    params.push(filters.is_palindrome ? 1 : 0);
+    params.push(filters.is_palindrome ? true : false);
   }
 
   if (filters.min_length !== undefined) {
@@ -136,7 +131,7 @@ export async function getFilteredStrings(filters) {
     params.push(`%${filters.contains_character}%`);
   }
 
-  const rows = db.prepare(query).all(...params);
+  const rows = await db.all(query, params);
 
   const data = rows.map((row) => ({
     id: row.id,
@@ -154,7 +149,7 @@ export async function getFilteredStrings(filters) {
 
 export async function deleteStringByValue(value) {
   const db = await initDB();
-  const result = db.prepare("DELETE FROM strings WHERE value = ?").run(value);
+  const result = await db.run("DELETE FROM strings WHERE value = ?", [value]);
 
   if (result.changes === 0) {
     throw new ResponseStatusException(

@@ -1,12 +1,17 @@
-import Database from "better-sqlite3";
+import sqlite3 from "sqlite3";
+import { open } from "sqlite";
 
 let db;
 
 export async function initDB() {
-  if (!db) {
-    db = new Database("./database.db");
+  if (db) return db;
 
-    db.exec(`
+  db = await open({
+    filename: "./database.db",
+    driver: sqlite3.Database,
+  });
+
+  db.exec(`
             CREATE TABLE IF NOT EXISTS strings (
                 id TEXT PRIMARY KEY,
                 value TEXT UNIQUE NOT NULL,
@@ -14,7 +19,6 @@ export async function initDB() {
                 created_at TEXT NOT NULL UNIQUE
                 )
                 `);
-  }
 
   return db;
 }
