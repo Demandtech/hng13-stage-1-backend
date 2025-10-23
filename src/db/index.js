@@ -1,23 +1,25 @@
 import { Sequelize } from "sequelize";
-import dotenv from "dotenv";
 
-dotenv.config({ quiet: true });
 
-export const sequelize = new Sequelize(process.env.DB_DATABASE_URI, {
-  dialect: "postgres",
-  dialectOptions: {
-    ssl: {
-      require: true,
-      rejectUnauthorized: false,
+// Database connection string Hostless does not allow env variables on free plans and no other sensitive data is used here.
+export const sequelize = new Sequelize(
+  "postgresql://postgres.nxdecqbnuyvkztahiemn:ZJitPQ8WYnbKy7HZ@aws-1-eu-west-1.pooler.supabase.com:5432/postgres",
+  {
+    dialect: "postgres",
+    dialectOptions: {
+      ssl: {
+        require: true,
+        rejectUnauthorized: false,
+      },
     },
-  },
-  pool: {
-    max: 5,
-    min: 0,
-    idle: 10000,
-    acquire: 30000,
-  },
-});
+    pool: {
+      max: 5,
+      min: 0,
+      idle: 10000,
+      acquire: 30000,
+    },
+  }
+);
 
 export async function connectDB() {
   try {
