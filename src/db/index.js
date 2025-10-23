@@ -1,9 +1,22 @@
 import { Sequelize } from "sequelize";
+import dotenv from "dotenv";
 
-export const sequelize = new Sequelize({
-  dialect: "sqlite",
-  storage: "./database.sqlite",
-  logging: true, 
+dotenv.config({ quiet: true });
+
+export const sequelize = new Sequelize(process.env.DB_DATABASE_URI, {
+  dialect: "postgres",
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false,
+    },
+  },
+  pool: {
+    max: 5,
+    min: 0,
+    idle: 10000,
+    acquire: 30000,
+  },
 });
 
 export async function connectDB() {
